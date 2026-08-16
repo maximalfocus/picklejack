@@ -89,4 +89,12 @@ filesystem-writing, and egress-producing payloads are out of scope by design.
 
 ## License
 
-Released under the MIT License once the repository is published; see the delivery plan.
+Released under the [MIT License](LICENSE).
+
+## Contributing & security
+
+This is **local-only educational software**: there is **no hosted service and no production-safety
+claim**, and it carries no support, compatibility, or response-time commitment. Contribution
+guidance is in [`CONTRIBUTING.md`](CONTRIBUTING.md); the security policy — including that the
+vulnerable contrast app's insecure behaviour is **intentional and in scope**, and how to privately
+report an *unintended* vulnerability — is in [`SECURITY.md`](SECURITY.md).
