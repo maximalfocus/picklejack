@@ -13,12 +13,11 @@ insecure version of such a feature reconstructs attacker-controlled bytes back i
 reconstructing an object can run code); the secure version parses a **data-only** snapshot into a typed
 schema and never builds arbitrary objects.
 
-This repository is being built issue by issue. **Currently delivered:** the secure baseline — the
-multi-tenant workspace model, demo authentication, and the secure `GET /workspace/export` /
-`POST /workspace/import` endpoints, verified through a Docker Compose boundary; **and** the intentionally
+The secure baseline (multi-tenant workspace model, demo authentication, secure `GET /workspace/export` /
+`POST /workspace/import`, and a defence-in-depth integrity-authenticated path), the intentionally
 vulnerable contrast app with the full deserialization escalation ladder (through both `pickle` and unsafe
-YAML), behind two deliberate opt-in actions in a hardened, no-egress container. The comparison CLI and
-the complete educational walkthrough are added in the next slice.
+YAML) behind two opt-in actions in a hardened no-egress container, and a side-by-side **comparison CLI**
+are all in place. See **[`docs/WALKTHROUGH.md`](docs/WALKTHROUGH.md)** for the full five-minute tour.
 
 ## Requirements
 
@@ -52,6 +51,9 @@ and no integrity check. Starting it requires **two deliberate actions** — its 
 **no-egress** container and publishes nothing beyond a loopback proxy on `127.0.0.1:8001`.
 
 ```sh
+# Full side-by-side comparison of BOTH apps over real HTTP (the comparison CLI).
+ALLOW_VULNERABLE_DEMO=true docker compose --profile compare run --build --rm compare
+
 # One-shot: run the escalation ladder over real HTTP (both deserializers), then exit.
 ALLOW_VULNERABLE_DEMO=true docker compose --profile vuln-demo run --build --rm vuln-demo
 
