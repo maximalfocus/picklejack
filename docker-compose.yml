@@ -1,0 +1,65 @@
+# Docker Compose is the only supported host workflow. The host needs only Docker;
+# Python, uv, and all tooling run inside the image.
+#
+#   docker compose up --build secure        # run the secure API on 127.0.0.1:8000
+#   docker compose run --build --rm demo    # one-shot: seed fresh state, exercise over HTTP, exit
+#   docker compose run --build --rm verify  # ruff + mypy + pytest inside the image
+#   docker compose down -v                  # dispose of all state
+#
+# The image copies source in at build time, so pass --build after editing code.
+# The intentionally vulnerable contrast app is added in a later slice; only the
+# secure application exists here.
+
+services:
+  # The secure application is the default long-running service.
+  secure:
+    build:
+      context: .
+    image: picklejack:dev
+    command:
+      ["uvicorn", "picklejack.main_secure:app", "--host", "0.0.0.0", "--port", "8000"]
+    ports:
+      - "127.0.0.1:8000:8000"
+    read_only: true
+    tmpfs:
+      - /tmp
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    healthcheck:
+      test:
+        ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/healthz')"]
+      interval: 3s
+      timeout: 3s
+      retries: 20
+      start_period: 2s
+
+  # One-shot disposable demo: brings up the secure app, exercises it over real
+  # localhost HTTP against fresh deterministic state, reports, and exits.
+  demo:
+    build:
+      context: .
+    image: picklejack:dev
+    profiles: ["demo"]
+    depends_on:
+      secure:
+        condition: service_healthy
+    environment:
+      - PICKLEJACK_BASE_URL=http://secure:8000
+    command: ["python", "-m", "demo.secure_demo"]
+
+  # Verification boundary: identical command locally and in GitHub Actions.
+  verify:
+    build:
+      context: .
+    image: picklejack:dev
+    profiles: ["verify"]
+    environment:
+      # The image runs as a non-root user; keep tool caches off the root-owned /app.
+      - RUFF_CACHE_DIR=/tmp/ruff
+      - MYPY_CACHE_DIR=/tmp/mypy
+    command:
+      - sh
+      - -c
+      - ruff check . && ruff format --check . && mypy . && pytest -q
