@@ -53,6 +53,14 @@ The secure app also serves its generated OpenAPI docs at `http://127.0.0.1:8000/
   unsafe-YAML payload — is **rejected with one generic response**: nothing is reconstructed as an
   object, a conspicuously fictional demonstration secret held only in code is unreachable, no command
   executes, and no error reveals which fields, types, or formats are accepted.
+- For products that genuinely cannot yet drop an opaque binary snapshot, a **secondary,
+  defence-in-depth** path (`POST /workspace/import/verified`) **authenticates the snapshot's integrity
+  (HMAC) before deserializing** and uses a **restricted `Unpickler` with a type allowlist**. It accepts
+  a legitimate server-signed snapshot and rejects a tampered or unsigned one. This is a mitigation, not
+  the primary control: a leaked signing key or a dangerous type reachable from otherwise-trusted data
+  still bites, so untrusted input should be parsed as data against a schema wherever possible.
+- Every snapshot rejection emits exactly one generic structured JSON audit event (actor, tenant, action,
+  outcome, correlation id) — never the snapshot, a token, a secret, or the accepted fields/types.
 - Fixtures are deterministic and **read-only**: no request path mutates domain state.
 
 ## License

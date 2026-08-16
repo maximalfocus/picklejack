@@ -64,6 +64,14 @@ def _import(client: httpx.Client, fmt: str, data: str) -> httpx.Response:
     return client.post("/workspace/import", headers=_auth(), json={"format": fmt, "data": data})
 
 
+def _import_verified(client: httpx.Client, data: str, signature: str) -> httpx.Response:
+    return client.post(
+        "/workspace/import/verified",
+        headers=_auth(),
+        json={"data": data, "signature": signature},
+    )
+
+
 def _leaks(text: str) -> str | None:
     if FICTIONAL_INTEGRATION_SECRET in text:
         return "integration secret leaked"
@@ -116,6 +124,34 @@ def main() -> int:
             leak = _leaks(response.text)
             if leak is not None:
                 failures.append(f"{label}: {leak}")
+
+        # 2b. Defence-in-depth: the integrity-authenticated path accepts a
+        # server-signed snapshot and rejects a tampered one.
+        signed = client.get("/workspace/export/verified", headers=_auth()).json()
+        accepted = _import_verified(client, signed["data"], signed["signature"])
+        signed_ok = (
+            accepted.status_code == 200
+            and accepted.json()["workspace"]["workspace_name"] == EXPECTED_WORKSPACE
+        )
+        print(
+            f"{'signed snapshot (integrity path)':<40} | {'accepted' if signed_ok else 'MISMATCH'}"
+        )
+        if not signed_ok:
+            failures.append(
+                "integrity-authenticated path did not accept a legitimate signed snapshot"
+            )
+
+        raw = bytearray(base64.b64decode(signed["data"]))
+        raw[-1] ^= 0x01
+        tampered = _import_verified(
+            client, base64.b64encode(bytes(raw)).decode(), signed["signature"]
+        )
+        print(f"{'tampered signed snapshot':<40} | HTTP {tampered.status_code} (rejected)")
+        if tampered.status_code != 400:
+            failures.append(f"tampered signed snapshot returned {tampered.status_code}, want 400")
+        leak = _leaks(tampered.text)
+        if leak is not None:
+            failures.append(f"tampered signed snapshot: {leak}")
 
         # 3. Authentication is generic: an unknown token is a plain 401.
         bad = client.post(

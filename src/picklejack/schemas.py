@@ -57,6 +57,17 @@ class SnapshotEnvelope(BaseModel):
     data: str = Field(description="The encoded snapshot payload.")
 
 
+class SignedSnapshotEnvelope(BaseModel):
+    """A server-signed opaque snapshot for the defence-in-depth path.
+
+    Carries base64-encoded opaque snapshot bytes and an HMAC computed over those
+    bytes with a server-side key. The integrity check runs before deserialization.
+    """
+
+    data: str = Field(description="Base64-encoded opaque snapshot bytes.")
+    signature: str = Field(description="Hex HMAC over the snapshot bytes.")
+
+
 class ImportResponse(BaseModel):
     """The reconstructed workspace view and how it was produced."""
 
