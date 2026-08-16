@@ -6,9 +6,12 @@
 #   docker compose run --build --rm verify  # ruff + mypy + pytest inside the image
 #   docker compose down -v                  # dispose of all state
 #
+# The vulnerable app is intentionally insecure LOCAL EDUCATIONAL code. Starting it
+# needs TWO deliberate actions — its opt-in profile AND ALLOW_VULNERABLE_DEMO=true:
+#   ALLOW_VULNERABLE_DEMO=true docker compose --profile vulnerable up --build vulnerable vuln-proxy
+#   ALLOW_VULNERABLE_DEMO=true docker compose --profile vuln-demo run --build --rm vuln-demo
+#
 # The image copies source in at build time, so pass --build after editing code.
-# The intentionally vulnerable contrast app is added in a later slice; only the
-# secure application exists here.
 
 services:
   # The secure application is the default long-running service.
@@ -49,6 +52,77 @@ services:
       - PICKLEJACK_BASE_URL=http://secure:8000
     command: ["python", "-m", "demo.secure_demo"]
 
+  # The intentionally vulnerable app. Opt-in profile (action 1) plus
+  # ALLOW_VULNERABLE_DEMO=true (action 2), or it refuses to start. Loopback-only,
+  # hardened, and attached only to an internal (no-egress) network.
+  vulnerable:
+    build:
+      context: .
+    image: picklejack:dev
+    # In "vuln-demo" too, so `--profile vuln-demo` starts this dependency as well.
+    profiles: ["vulnerable", "vuln-demo"]
+    command:
+      ["uvicorn", "picklejack.main_vulnerable:app", "--host", "0.0.0.0", "--port", "8001"]
+    environment:
+      - ALLOW_VULNERABLE_DEMO=${ALLOW_VULNERABLE_DEMO:-}
+    # No host port: the vulnerable app is reachable only over the internal network.
+    read_only: true
+    tmpfs:
+      - /tmp
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    networks:
+      - novnet
+    healthcheck:
+      test:
+        ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8001/healthz')"]
+      interval: 3s
+      timeout: 3s
+      retries: 20
+      start_period: 2s
+
+  # Benign edge proxy that publishes 127.0.0.1:8001 for manual exploration and
+  # forwards to the egress-free vulnerable container. It reconstructs no objects.
+  vuln-proxy:
+    build:
+      context: .
+    image: picklejack:dev
+    profiles: ["vulnerable"]
+    command: ["python", "-m", "demo.tcp_proxy"]
+    ports:
+      - "127.0.0.1:8001:8001"
+    depends_on:
+      vulnerable:
+        condition: service_healthy
+    read_only: true
+    tmpfs:
+      - /tmp
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    networks:
+      - novnet
+      - edge
+
+  # One-shot demo of the vulnerable escalation ladder over real HTTP.
+  # Same two opt-in actions as the vulnerable service.
+  vuln-demo:
+    build:
+      context: .
+    image: picklejack:dev
+    profiles: ["vuln-demo"]
+    depends_on:
+      vulnerable:
+        condition: service_healthy
+    environment:
+      - PICKLEJACK_VULNERABLE_URL=http://vulnerable:8001
+    networks:
+      - novnet
+    command: ["python", "-m", "demo.vulnerable_demo"]
+
   # Verification boundary: identical command locally and in GitHub Actions.
   verify:
     build:
@@ -63,3 +137,11 @@ services:
       - sh
       - -c
       - ruff check . && ruff format --check . && mypy . && pytest -q
+
+networks:
+  # Internal network: no gateway to the outside world, so the vulnerable container
+  # has no network egress even under in-container code execution.
+  novnet:
+    internal: true
+  # Edge network: lets the benign proxy publish a loopback host port.
+  edge: {}

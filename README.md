@@ -15,9 +15,10 @@ schema and never builds arbitrary objects.
 
 This repository is being built issue by issue. **Currently delivered:** the secure baseline — the
 multi-tenant workspace model, demo authentication, and the secure `GET /workspace/export` /
-`POST /workspace/import` endpoints, verified through a Docker Compose boundary. The intentionally
-vulnerable contrast app, the deserialization escalation ladder, the comparison CLI, the full regression
-matrix, and the walkthrough are added in later slices.
+`POST /workspace/import` endpoints, verified through a Docker Compose boundary; **and** the intentionally
+vulnerable contrast app with the full deserialization escalation ladder (through both `pickle` and unsafe
+YAML), behind two deliberate opt-in actions in a hardened, no-egress container. The comparison CLI and
+the complete educational walkthrough are added in the next slice.
 
 ## Requirements
 
@@ -42,6 +43,27 @@ docker compose down -v
 ```
 
 The secure app also serves its generated OpenAPI docs at `http://127.0.0.1:8000/docs`.
+
+### The intentionally vulnerable app (⚠️ local educational code — never deploy)
+
+The vulnerable contrast app reconstructs objects from untrusted bytes with `pickle.loads` / `yaml.load`
+and no integrity check. Starting it requires **two deliberate actions** — its opt-in Compose profile
+**and** `ALLOW_VULNERABLE_DEMO=true` — or it refuses to start. It runs non-root in a hardened, read-only,
+**no-egress** container and publishes nothing beyond a loopback proxy on `127.0.0.1:8001`.
+
+```sh
+# One-shot: run the escalation ladder over real HTTP (both deserializers), then exit.
+ALLOW_VULNERABLE_DEMO=true docker compose --profile vuln-demo run --build --rm vuln-demo
+
+# Or bring it up for manual exploration on http://127.0.0.1:8001, then tear down.
+ALLOW_VULNERABLE_DEMO=true docker compose --profile vulnerable up --build vulnerable vuln-proxy
+
+# Prove the container hardening (non-root, caps dropped, read-only rootfs, no egress).
+ALLOW_VULNERABLE_DEMO=true bash scripts/verify-vulnerable-hardening.sh
+```
+
+The code-execution proof is confined to the single read-only command `id`. Destructive, persistent,
+filesystem-writing, and egress-producing payloads are out of scope by design.
 
 ## Security model
 
