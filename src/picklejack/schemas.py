@@ -75,3 +75,20 @@ class ImportResponse(BaseModel):
     workspace: WorkspaceSnapshot
     source_format: str
     import_mode: str
+
+
+class VulnerableImportResponse(BaseModel):
+    """The vulnerable app's result: it surfaces what was reconstructed and how.
+
+    ``workspace`` is populated only when the reconstructed object is a valid
+    workspace (so a benign result equals the secure app's); ``reconstructed`` shows
+    the string value of whatever object was built from untrusted bytes, which is how
+    a disclosed secret or executed-command output becomes observable.
+    """
+
+    tenant: str
+    deserializer: str
+    reconstructed_from_untrusted_bytes: bool
+    reconstructed: str
+    workspace: WorkspaceSnapshot | None
+    import_mode: str
