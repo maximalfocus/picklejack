@@ -59,8 +59,8 @@ services:
     build:
       context: .
     image: picklejack:dev
-    # In "vuln-demo" too, so `--profile vuln-demo` starts this dependency as well.
-    profiles: ["vulnerable", "vuln-demo"]
+    # Also in "vuln-demo"/"compare" so those profiles start this dependency too.
+    profiles: ["vulnerable", "vuln-demo", "compare"]
     command:
       ["uvicorn", "picklejack.main_vulnerable:app", "--host", "0.0.0.0", "--port", "8001"]
     environment:
@@ -122,6 +122,28 @@ services:
     networks:
       - novnet
     command: ["python", "-m", "demo.vulnerable_demo"]
+
+  # Full side-by-side comparison over real HTTP: the CLI `compare` mode against
+  # BOTH apps. Reaches the secure app (default network) and the vulnerable app
+  # (internal network). Same two opt-in actions as the vulnerable service.
+  compare:
+    build:
+      context: .
+    image: picklejack:dev
+    profiles: ["compare"]
+    depends_on:
+      secure:
+        condition: service_healthy
+      vulnerable:
+        condition: service_healthy
+    environment:
+      - ALLOW_VULNERABLE_DEMO=${ALLOW_VULNERABLE_DEMO:-}
+    networks:
+      - default
+      - novnet
+    command:
+      ["python", "-m", "picklejack.cli", "compare",
+       "--secure-url", "http://secure:8000", "--vulnerable-url", "http://vulnerable:8001"]
 
   # Verification boundary: identical command locally and in GitHub Actions.
   verify:
