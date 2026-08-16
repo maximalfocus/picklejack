@@ -2,12 +2,17 @@
 
 from __future__ import annotations
 
+import io
+import json
+import logging
 from collections.abc import Iterator
+from contextlib import contextmanager
 
 import pytest
 from fastapi.testclient import TestClient
 
 from picklejack.apps.secure import create_secure_app
+from picklejack.logging_setup import AUDIT_LOGGER_NAME, JsonFormatter
 
 GLOBEX_TOKEN = "demo-token-globex-mallory"
 INITECH_TOKEN = "demo-token-initech-peter"
@@ -16,6 +21,25 @@ INITECH_TOKEN = "demo-token-initech-peter"
 def auth(token: str) -> dict[str, str]:
     """Build an Authorization header for the given bearer token."""
     return {"Authorization": f"Bearer {token}"}
+
+
+@contextmanager
+def capture_audit() -> Iterator[io.StringIO]:
+    """Capture audit-logger output emitted while the block runs."""
+    buffer = io.StringIO()
+    handler = logging.StreamHandler(buffer)
+    handler.setFormatter(JsonFormatter())
+    audit = logging.getLogger(AUDIT_LOGGER_NAME)
+    audit.addHandler(handler)
+    try:
+        yield buffer
+    finally:
+        audit.removeHandler(handler)
+
+
+def audit_lines(buffer: io.StringIO) -> list[dict[str, str]]:
+    """Parse captured audit output into a list of JSON event dicts."""
+    return [json.loads(line) for line in buffer.getvalue().splitlines() if line.strip()]
 
 
 @pytest.fixture

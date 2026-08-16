@@ -21,6 +21,11 @@ FICTIONAL_INTEGRATION_SECRET = "sk-demo-INTEGRATION-0000-NOT-A-REAL-SECRET"
 # unambiguous, meaningless thing to reach.
 DEMO_SENTINEL = "PICKLEJACK-DEMO-SENTINEL-7b3e5a91"
 
+# A conspicuously fake demonstration HMAC key for the defence-in-depth
+# integrity-authenticated import path. It is not a real secret and signs nothing
+# beyond this local demonstration's own snapshots.
+SNAPSHOT_SIGNING_KEY = b"picklejack-demo-signing-key-NOT-A-REAL-SECRET"
+
 
 @dataclass(frozen=True)
 class AppConfig:
@@ -28,6 +33,7 @@ class AppConfig:
 
     integration_secret: str = FICTIONAL_INTEGRATION_SECRET
     demo_sentinel: str = DEMO_SENTINEL
+    signing_key: bytes = SNAPSHOT_SIGNING_KEY
 
 
 APP_CONFIG = AppConfig()
